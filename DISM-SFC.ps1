@@ -1,38 +1,46 @@
-# Ensure script is running as Administrator
+# Check for Administrative privileges
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
     Write-Host "ERROR: Please run this script as an Administrator." -ForegroundColor Red
-    return
+    break
 }
 
-Write-Host "Starting System Repair..." -ForegroundColor Cyan
+Write-Host "--- Windows System Health Check & Repair ---" -ForegroundColor Cyan
 
-# 1. Run DISM RestoreHealth
-Write-Host "`n[1/2] Running DISM RestoreHealth..." -ForegroundColor Yellow
-$dismOutput = dism.exe /Online /Cleanup-Image /RestoreHealth 2>&1
+# 1. DISM ScanHealth (The Check)
+Write-Host "`n[1/3] Scanning for component store corruption..." -ForegroundColor Yellow
+$scanOutput = dism.exe /Online /Cleanup-Image /ScanHealth 2>&1
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: DISM encountered a problem. Exit Code: $LASTEXITCODE" -ForegroundColor Red
-    $dismOutput | Select-String "Error:" | Write-Host -ForegroundColor Red
+if ($scanOutput -match "The component store is repairable" -or $scanOutput -match "corruption was detected") {
+    Write-Host "(!) Corruption detected. Starting Repair..." -ForegroundColor Red
+    
+    # 2. DISM RestoreHealth (The Fix)
+    Write-Host "[2/3] Running DISM RestoreHealth..." -ForegroundColor Yellow
+    $repairOutput = dism.exe /Online /Cleanup-Image /RestoreHealth 2>&1
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: DISM repair failed. Exit Code: $LASTEXITCODE" -ForegroundColor Red
+    } else {
+        Write-Host "SUCCESS: DISM repair completed." -ForegroundColor Green
+    }
 } else {
-    Write-Host "SUCCESS: DISM completed successfully." -ForegroundColor Green
+    Write-Host "SUCCESS: No component store corruption detected. Skipping DISM repair." -ForegroundColor Green
 }
 
-# 2. Run SFC Scannow
-Write-Host "`n[2/2] Running SFC Scannow..." -ForegroundColor Yellow
+# 3. SFC Scannow (System File Verification)
+Write-Host "`n[3/3] Running SFC Scannow..." -ForegroundColor Yellow
 $sfcOutput = sfc.exe /scannow 2>&1
 
-# Check for specific SFC failure messages
-if ($sfcOutput -match "Windows Resource Protection found corrupt files but was unable to fix some of them") {
+if ($sfcOutput -match "found corrupt files but was unable to fix some of them") {
     Write-Host "ERROR: SFC found corruption it could NOT repair." -ForegroundColor Red
 }
 elseif ($sfcOutput -match "Windows Resource Protection could not perform the requested operation") {
-    Write-Host "ERROR: SFC failed to run." -ForegroundColor Red
+    Write-Host "ERROR: SFC failed to execute." -ForegroundColor Red
 }
-elseif ($sfcOutput -match "Windows Resource Protection found corrupt files and successfully repaired them") {
-    Write-Host "SUCCESS: SFC found and repaired corrupted files." -ForegroundColor Green
+elseif ($sfcOutput -match "found corrupt files and successfully repaired them") {
+    Write-Host "SUCCESS: SFC found and repaired system files." -ForegroundColor Green
 }
 else {
-    Write-Host "SUCCESS: SFC found no integrity violations." -ForegroundColor Green
+    Write-Host "SUCCESS: No system file integrity violations found." -ForegroundColor Green
 }
 
-Write-Host "`nRepair process finished." -ForegroundColor Cyan
+Write-Host "`n--- Process Completed ---" -ForegroundColor Cyan
