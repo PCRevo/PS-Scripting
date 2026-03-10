@@ -7,7 +7,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 Write-Host "--- Windows System Health Check & Repair ---" -ForegroundColor Cyan
 
 # 1. DISM ScanHealth (The Check)
-Write-Host "`n[1/3] Scanning for component store corruption..." -ForegroundColor Yellow
+Write-Host "`n[1/3] Scanning for component store corruption using DISM..." -ForegroundColor Yellow
 $scanOutput = dism.exe /Online /Cleanup-Image /ScanHealth 2>&1
 
 if ($scanOutput -match "The component store is repairable" -or $scanOutput -match "corruption was detected") {
